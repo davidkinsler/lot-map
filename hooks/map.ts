@@ -323,12 +323,48 @@ const LIGHT: Palette = {
 }
 
 /**
- * For `auto`: the drawing is made in the dark palette, and these rules repaint it where the surface around it is light.
- * Every color on the map is one of the palette's, written as a plain attribute, so a rule per color reaches all of it;
- * a surface that drops the rules shows the dark map, whole.
+ * Each station's own color, as [at rest or lit, brighter while running]: the same color its button's dot has under the map.
+ * Model keeps the map's accent and Memory its own teal; red is left to errors and refusals.
  */
-const LIGHT_RULES = `<style>@media (prefers-color-scheme: light){${(Object.keys(DARK) as (keyof Palette)[])
-  .map(k => `[fill="${DARK[k]}"]{fill:${LIGHT[k]}}[stroke="${DARK[k]}"]{stroke:${LIGHT[k]}}`)
+export const DARK_TONES: Record<StationId, readonly [string, string]> = {
+  you: ['#d6d0c4', '#f3eee5'],
+  model: ['#e1ac6e', '#f0c595'],
+  memory: ['#62c7ba', '#a5e6dc'],
+  files: ['#7f95f0', '#bcc7f8'],
+  shell: ['#8cc96a', '#c4e5aa'],
+  web: ['#b388ec', '#d7c1f7'],
+  browser: ['#e57fc1', '#f3b9de'],
+  agents: ['#e6cf5a', '#f3e597'],
+  skills: ['#5fc0ef', '#a8dff8'],
+  hooks: ['#c9967a', '#e3c3ae'],
+}
+
+const LIGHT_TONES: Record<StationId, readonly [string, string]> = {
+  you: ['#5a5f69', '#2e323a'],
+  model: ['#b8762a', '#8f560f'],
+  memory: ['#1c8c81', '#136a62'],
+  files: ['#4a5fd0', '#33449c'],
+  shell: ['#4f8f2c', '#386a1d'],
+  web: ['#7b4fc4', '#5a3692'],
+  browser: ['#b8458f', '#8a2f6a'],
+  agents: ['#a08712', '#74610a'],
+  skills: ['#1f86b8', '#165f84'],
+  hooks: ['#8f5f45', '#6a4431'],
+}
+
+/** A station's two colors in the palette at hand. */
+const toneOf = (c: Palette, station: StationId): readonly [string, string] => (c === LIGHT ? LIGHT_TONES : DARK_TONES)[station]
+
+/**
+ * For `auto`: the drawing is made in the dark palette, and these rules repaint it where the surface around it is light.
+ * Every color on the map is one of the palette's or a station's, written as a plain attribute, so a rule per color reaches
+ * all of it; a surface that drops the rules shows the dark map, whole.
+ */
+const LIGHT_RULES = `<style>@media (prefers-color-scheme: light){${[
+  ...(Object.keys(DARK) as (keyof Palette)[]).map(k => [DARK[k], LIGHT[k]] as const),
+  ...(Object.keys(DARK_TONES) as StationId[]).flatMap(id => [0, 1].map(i => [DARK_TONES[id][i], LIGHT_TONES[id][i]] as const)),
+]
+  .map(([dark, light]) => `[fill="${dark}"]{fill:${light}}[stroke="${dark}"]{stroke:${light}}`)
   .join('')}}</style>`
 
 const FONT = 'font-family="SF Mono, ui-monospace, Menlo, monospace"'
@@ -468,7 +504,7 @@ function station(s: (typeof STATIONS)[number], i: number, { entries, board, now,
   const alarmAge = alarm === undefined ? Infinity : now - (alarm.endedAt ?? alarm.startedAt)
   const isAlarm = alarmAge < ALARM_MS
   const isLit = running.length > 0 || since < GLOW_MS
-  const [main, hot] = s.id === 'memory' ? [c.mem, c.memHot] : [c.accent, c.hot]
+  const [main, hot] = toneOf(c, s.id)
   const color = isAlarm ? c.red : main
   const fade = isAlarm ? alarmAge : since
   const span = isAlarm ? ALARM_MS : GLOW_MS
@@ -503,7 +539,8 @@ function station(s: (typeof STATIONS)[number], i: number, { entries, board, now,
       : isLit || isAlarm
         ? `${lit} opacity="0"><animate attributeName="opacity" values="1;0" begin="${clock(-fade)}" dur="${clock(span)}" fill="freeze"/></circle>`
         : ''
-  const glyphColor = isAlarm ? c.red : isLit ? hot : s.id === 'memory' && count > 0 ? main : c.ash
+  // A station used at least once keeps its color at rest, so the map reads the same as the buttons under it.
+  const glyphColor = isAlarm ? c.red : isLit ? hot : count > 0 ? main : c.ash
   // The words stand on a rim of the ground's own color, so a line that passes behind them never strikes them through.
   const rim = `paint-order="stroke" stroke="${c.ground}" stroke-width="3.5" stroke-linejoin="round"`
   let over =
@@ -580,7 +617,7 @@ export function drawMap(board: Board, now: number, setup: Setup): string {
   const anyRunning = recent.some(e => e.status === 'run')
   const agentsAt = place(indexOf('agents'))
   const isBad = (e: Entry): boolean => e.status === 'block' || e.status === 'err'
-  const tone = (e: Entry): [string, string] => (e.station === 'memory' ? [c.mem, c.memHot] : [c.accent, c.hot])
+  const tone = (e: Entry): readonly [string, string] => toneOf(c, e.station)
 
   let body = `<rect width="${W}" height="${H}" rx="12" fill="${c.ground}"/>`
 
@@ -598,7 +635,7 @@ export function drawMap(board: Board, now: number, setup: Setup): string {
     const worn = Math.min(1, Math.log2(1 + (board.counts[s.id] ?? 0)) / 7)
     const line = `<line x1="${n1(a.x)}" y1="${n1(a.y)}" x2="${n1(b.x)}" y2="${n1(b.y)}" stroke-width="${n1(1 + 2.6 * worn)}" stroke-linecap="round"`
     body += `${line} stroke="${c.spoke}"/>`
-    if (worn > 0) body += `${line} stroke="${s.id === 'memory' ? c.mem : c.accent}" opacity="${n1(worn * 0.55)}"/>`
+    if (worn > 0) body += `${line} stroke="${toneOf(c, s.id)[0]}" opacity="${n1(worn * 0.55)}"/>`
   })
 
   const scene: Scene = { entries: recent, board, now, c, names: setup.t.stations }
@@ -646,7 +683,7 @@ export function drawMap(board: Board, now: number, setup: Setup): string {
     const spin = `${n1(agentsAt.x)} ${n1(agentsAt.y)}`
     body +=
       `<g><animateTransform attributeName="transform" type="rotate" from="0 ${spin}" to="360 ${spin}" begin="${clock(-((now + (k * lap) / crew.length) % lap))}" dur="${clock(lap)}" repeatCount="indefinite"/>` +
-      `<circle cx="${n1(agentsAt.x)}" cy="${n1(agentsAt.y - NODE - 6)}" r="3" fill="${c.hot}"/></g>`
+      `<circle cx="${n1(agentsAt.x)}" cy="${n1(agentsAt.y - NODE - 6)}" r="3" fill="${toneOf(c, 'agents')[1]}"/></g>`
   })
 
   // A name longer than three letters shrinks to stay inside the circle.

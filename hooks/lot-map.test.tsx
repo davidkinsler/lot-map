@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import type { Board } from '../types'
 import type { Entry } from '../types'
-import { MAX_NAMES, classify, clean, drawMap, firstLine, foldRows, formatMs, memoryIds, newest, notKeptAt, routeOf, setupFrom, tally, usedAt } from './map'
+import { DARK_TONES, MAX_NAMES, classify, clean, drawMap, firstLine, foldRows, formatMs, memoryIds, newest, notKeptAt, routeOf, setupFrom, tally, usedAt } from './map'
 import { stringsFor } from './text'
 
 const PANE = {
@@ -491,8 +491,20 @@ test('the context ring, the crew, the model change and the light theme are drawn
     now,
     setupFrom({ theme: 'dark' }),
   )
-  const known = new Set(['#0a0c11', '#12151c', '#272c36', '#1a1e27', '#ebe6dc', '#9ba1ab', '#6b7280', '#e1ac6e', '#f0c595', '#e8654f', '#62c7ba', '#a5e6dc'])
+  const tones = Object.values(DARK_TONES).flat()
+  const known = new Set(['#0a0c11', '#12151c', '#272c36', '#1a1e27', '#ebe6dc', '#9ba1ab', '#6b7280', '#e1ac6e', '#f0c595', '#e8654f', '#62c7ba', '#a5e6dc', ...tones])
   expect([...new Set(lit.match(/#[0-9a-f]{6}/g) ?? [])].filter(color => !known.has(color))).toEqual([])
+  // Each station's colors are repainted on a light surface too, and no two stations share one.
+  for (const color of tones) expect(bare).toContain(`[fill="${color}"]{fill:`)
+  expect(new Set(Object.values(DARK_TONES).map(([main]) => main)).size).toBe(10)
+})
+
+test('a station has its own color on the map, the one its button\'s dot has', () => {
+  const now = 1_000_000
+  const svg = drawMap({ entries: [entry('skills', now - 50, { status: 'run', endedAt: undefined })], counts: { skills: 1, shell: 2 } }, now, setupFrom({ theme: 'dark' }))
+  expect(svg).toContain(`stroke="${DARK_TONES.skills[0]}"`)
+  expect(svg).toContain(`stroke="${DARK_TONES.shell[0]}"`)
+  expect(svg).not.toContain(`stroke="${DARK_TONES.browser[0]}"`)
 })
 
 const stepOn = (model: string) => ({ turnId: 't1', index: 0, model, messageCount: 1 }) as const

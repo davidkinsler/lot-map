@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Board, Entry, StationId, Status } from '../types'
-import { STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, newest, notKeptAt, setupFrom, shortModel, tally, usedAt } from './map'
+import { DARK_TONES, STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, newest, notKeptAt, setupFrom, shortModel, tally, usedAt } from './map'
 import type { Setup } from './map'
 
 const PANE = 'lot-map'
@@ -330,14 +330,18 @@ export const register: Register = (on, options) => {
       usedStations.length === 0 ? (
         <Text dimColor>{t.noCounts}</Text>
       ) : (
-        <Box flexDirection="row" flexWrap="wrap" gap="sm">
+        <Box flexDirection="row" flexWrap="wrap" gap="xs">
           {usedStations.map(s => (
+            // Small type, and a dot in the station's own color: the color it has on the map.
             <Button
               key={`station-${s.id}`}
               label={`${t.stations[s.id]} ${state.counts[s.id] ?? 0}`}
               {...(open === s.id ? { variant: 'primary' as const } : {})}
               onPress={toggle(s.id)}
-            />
+            >
+              <Text size="caption" color={DARK_TONES[s.id][0]}>●</Text>
+              <Text size="caption">{` ${t.stations[s.id]} ${state.counts[s.id] ?? 0}`}</Text>
+            </Button>
           ))}
         </Box>
       )
@@ -348,7 +352,11 @@ export const register: Register = (on, options) => {
     const details =
       openStation === undefined ? null : (
         <Box flexDirection="column">
-          <Text mono size="footnote" bold>{`${t.stations[openStation.id]}:`}</Text>
+          {/* Only the dot takes the station's color: pale map colors are hard to read as words on a light pane. */}
+          <Box flexDirection="row">
+            <Text mono size="footnote" color={DARK_TONES[openStation.id][0]}>●</Text>
+            <Text mono size="footnote" bold>{` ${t.stations[openStation.id]}:`}</Text>
+          </Box>
           {list.map(([name, times]) => <Text mono size="footnote">{`  ${name}${times > 1 ? `  ×${times}` : ''}`}</Text>)}
           {notKept > 0 ? <Text mono size="footnote" dimColor>{`  ${t.notKept(notKept)}`}</Text> : null}
           {list.length === 0 && notKept <= 0 ? <Text mono size="footnote" dimColor>{`  ${t.nothingYet}`}</Text> : null}
