@@ -693,7 +693,7 @@ test('a station\'s button opens what it was used for, and a second press closes 
     let ui = await $.ui.mount({ ...PANE, surface })
     expect(await ui.find({ type: 'Text', text: /map-design  ×2/ })).toBeUndefined()
     // Each button's words are in its station's color; the open station's button is the primary one.
-    expect((await ui.find({ type: 'Text', text: /^Скиллы 3$/ }))?.props.color).toBe(DARK_TONES.skills[0])
+    expect((await ui.find({ type: 'Text', text: /^Скиллы \(3\)$/ }))?.props.color).toBe(DARK_TONES.skills[0])
     expect((await ui.find({ type: 'Button', key: 'station-skills' }))?.props.variant).toBeUndefined()
     await ui.press({ key: 'station-skills' })
     await ui.unmount()

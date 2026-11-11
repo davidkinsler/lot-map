@@ -338,12 +338,12 @@ export const register: Register = (on, options) => {
         <Box flexDirection="row" flexWrap="wrap" gap="xs">
           {usedStations.map(s => {
             // The words in the station's own map color, small. The desktop draws its own button and takes no background
-            // color for it (seen 11 November 2026), so the color goes on the words. The open station's button is the primary one.
-            const words = `${t.stations[s.id]} ${state.counts[s.id] ?? 0}`
+            // color for it, so the color goes on the words. No `label`: given one, the desktop drew it plain and left the
+            // colored children out (seen 11 November 2026). The open station's button is the primary one.
+            const words = `${t.stations[s.id]} (${state.counts[s.id] ?? 0})`
             return (
               <Button
                 key={`station-${s.id}`}
-                label={words}
                 {...(open === s.id ? { variant: 'primary' as const } : {})}
                 onPress={toggle(s.id)}
               >
