@@ -35,10 +35,16 @@ export type Board = {
   context?: number
   /** When the model last changed. */
   switchedAt?: number
+  /** What each station was used for this session: a name as its label shows it, and how many times; never content. */
+  used?: Partial<Record<StationId, [name: string, times: number][]>>
 }
 
 declare module 'claude-code' {
   interface PluginState {
-    'lot-map': { board: Shaped<Board> }
+    'lot-map': {
+      board: Shaped<Board>
+      /** The station whose list shows under the map; '' for none. */
+      shown: Shaped<string>
+    }
   }
 }

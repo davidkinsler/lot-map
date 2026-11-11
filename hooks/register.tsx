@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Board, Entry, StationId, Status } from '../types'
-import { STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, newest, setupFrom, shortModel } from './map'
+import { STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, newest, setupFrom, shortModel, tally, usedAt } from './map'
 import type { Setup } from './map'
 
 const PANE = 'lot-map'
@@ -11,6 +11,9 @@ const CREW = 12
 
 // Change the tag when a field of Entry or Board changes: it declines what an earlier version stored.
 const board = atom({ plugin: 'lot-map', key: 'board' } as const, { entries: [], counts: {} } as Board, { shape: 'board-2' })
+
+// The station whose list is open under the map, or '' for none.
+const shown = atom({ plugin: 'lot-map', key: 'shown' } as const, '' as string, { shape: 'shown-1' })
 
 const newId = (now: number): string => `${now.toString(36)}${Math.random().toString(36).slice(2, 7)}`
 
@@ -32,6 +35,8 @@ type Start = {
   mark?: Entry['mark']
   /** Adds nothing to the station's count: a second view of something already counted. */
   uncounted?: boolean
+  /** What the station's list records for this use; the label when absent. */
+  name?: string
   startedAt?: number
   endedAt?: number
   patch?: Partial<Pick<Board, 'model' | 'step' | 'switchedAt'>>
@@ -60,6 +65,7 @@ async function begin($: EngineInterface, start: Start): Promise<string | undefin
       ...start.patch,
       entries: newest([...b.entries, entry], KEEP),
       counts: start.uncounted ? b.counts : { ...b.counts, [entry.station]: (b.counts[entry.station] ?? 0) + 1 },
+      ...(start.uncounted ? {} : { used: tally(b.used, entry.station, start.name === undefined ? entry.label : clean(start.name)) }),
       // What a hook brought to memory unasked is counted apart from what was asked for.
       ...(entry.station === 'memory' && entry.from === 'inbound' && !start.uncounted ? { pushed: (b.pushed ?? 0) + 1 } : {}),
       // An interrupted turn lands on the person's own station and is no fault of anything.
@@ -176,6 +182,8 @@ export const register: Register = (on, options) => {
       station: 'model',
       label: `${shortModel(e.model)} · ${t.step(e.index + 1)}${isMain ? '' : ` · ${t.subagent}`}`,
       from: isMain ? 'core' : 'agents',
+      // The list counts steps by model, not one name per step.
+      name: `${shortModel(e.model)}${isMain ? '' : ` · ${t.subagent}`}`,
       ...(isMain ? { patch: { model: e.model, step: e.index + 1 } } : { agentId: e.agentId }),
     })
     try {
@@ -267,8 +275,13 @@ export const register: Register = (on, options) => {
       const now = await $.clock.now()
       await update($, board, b => {
         if (b.entries.some(x => x.station === 'skills' && x.status === 'run' && x.label === e.skill)) return b
-        const entry: Entry = { id: newId(now), station: 'skills', label: e.skill, from: 'core', startedAt: now, endedAt: now, status: 'ok' }
-        return { ...b, entries: newest([...b.entries, entry], KEEP), counts: { ...b.counts, skills: (b.counts.skills ?? 0) + 1 } }
+        const entry: Entry = { id: newId(now), station: 'skills', label: clean(e.skill), from: 'core', startedAt: now, endedAt: now, status: 'ok' }
+        return {
+          ...b,
+          entries: newest([...b.entries, entry], KEEP),
+          counts: { ...b.counts, skills: (b.counts.skills ?? 0) + 1 },
+          used: tally(b.used, 'skills', entry.label),
+        }
       })
     })
     return result
@@ -308,12 +321,46 @@ export const register: Register = (on, options) => {
     const feed = rows.length > 0 ? rows : [<Text dimColor>{t.nothingYet}</Text>]
     const current = <Text mono size="footnote">{describeNow(state, t)}</Text>
 
+    // A button for each station used so far, with its count; a press opens its list under the buttons, a second press closes it.
+    const { Button } = $.ui.resolve(e)
+    const open = (await quietly(() => read($, shown))) ?? ''
+    const usedStations = STATIONS.filter(s => (state.counts[s.id] ?? 0) > 0)
+    const toggle = (id: StationId) => () => void quietly(() => update($, shown, was => (was === id ? '' : id)))
+    const buttons =
+      usedStations.length === 0 ? (
+        <Text dimColor>{t.noCounts}</Text>
+      ) : (
+        <Box flexDirection="row" flexWrap="wrap" gap="sm">
+          {usedStations.map(s => (
+            <Button
+              key={`station-${s.id}`}
+              label={`${t.stations[s.id]} ${state.counts[s.id] ?? 0}`}
+              {...(open === s.id ? { variant: 'primary' as const } : {})}
+              onPress={toggle(s.id)}
+            />
+          ))}
+        </Box>
+      )
+    const openStation = usedStations.find(s => s.id === open)
+    const list = openStation === undefined ? [] : usedAt(state, openStation.id)
+    const details =
+      openStation === undefined ? null : (
+        <Box flexDirection="column">
+          <Text mono size="footnote" bold>{`${t.stations[openStation.id]}:`}</Text>
+          {list.length === 0 ? (
+            <Text mono size="footnote" dimColor>{t.nothingYet}</Text>
+          ) : (
+            list.map(([name, times]) => <Text mono size="footnote">{`  ${name}${times > 1 ? `  ×${times}` : ''}`}</Text>)
+          )}
+        </Box>
+      )
+
     if (e.surface === 'terminal') {
-      const tally = STATIONS.filter(s => (state.counts[s.id] ?? 0) > 0).map(s => `${t.stations[s.id]} ${state.counts[s.id]}`).join(' · ')
       return (
         <Box flexDirection="column">
           {current}
-          <Text dimColor>{tally === '' ? t.noCounts : tally}</Text>
+          {buttons}
+          {details}
           {feed}
         </Box>
       )
@@ -323,6 +370,8 @@ export const register: Register = (on, options) => {
     return (
       <Box flexDirection="column">
         <Svg source={drawMap(state, now, setup)} alt={`${t.title}. ${describeNow(state, t)}`} />
+        {buttons}
+        {details}
         {current}
         {feed}
       </Box>

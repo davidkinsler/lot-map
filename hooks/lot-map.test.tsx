@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import type { Board } from '../types'
 import type { Entry } from '../types'
-import { classify, clean, drawMap, firstLine, foldRows, formatMs, memoryIds, newest, routeOf, setupFrom } from './map'
+import { MAX_NAMES, classify, clean, drawMap, firstLine, foldRows, formatMs, memoryIds, newest, routeOf, setupFrom, tally, usedAt } from './map'
 import { stringsFor } from './text'
 
 const PANE = {
@@ -614,4 +614,59 @@ test('the ring can be turned so that the person is at the bottom and the network
   // A turned map does not leak into the next one drawn, and nonsense counts as not set.
   expect(drawMap(board, 1000, setupFrom({ theme: 'dark' }))).toBe(usual)
   expect(drawMap(board, 1000, setupFrom({ theme: 'dark', layout: 'sideways' }))).toBe(usual)
+})
+
+test('a station keeps the names it was used for, the most used first, thirty at most', () => {
+  let used = tally(undefined, 'skills', 'pdf')
+  used = tally(used, 'skills', 'map-design')
+  used = tally(used, 'skills', 'map-design')
+  used = tally(used, 'files', 'read a/b.md')
+  expect(usedAt({ entries: [], counts: {}, used }, 'skills')).toEqual([['map-design', 2], ['pdf', 1]])
+  expect(usedAt({ entries: [], counts: {}, used }, 'files')).toEqual([['read a/b.md', 1]])
+  expect(usedAt({ entries: [], counts: {} }, 'web')).toEqual([])
+  // A name is never an object key, so these are names like any other.
+  used = tally(tally(used, 'shell', 'constructor'), 'shell', '__proto__')
+  expect(usedAt({ entries: [], counts: {}, used }, 'shell')).toEqual([['constructor', 1], ['__proto__', 1]])
+  let full: Board['used'] = undefined
+  for (let i = 0; i < MAX_NAMES + 5; i++) full = tally(full, 'shell', `job ${i}`)
+  full = tally(full, 'shell', 'job 0')
+  const list = usedAt({ entries: [], counts: {}, used: full }, 'shell')
+  expect(list.length).toBe(MAX_NAMES + 1)
+  expect(list[0]).toEqual(['…', 5])
+  expect(list[1]).toEqual(['job 0', 2])
+})
+
+test('a station\'s button opens what it was used for, and a second press closes it', { options: OWN }, async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('tool.call', () => ({ result: {} }))
+  on('turn.step', async function* () {
+    return { turnId: 't1', index: 0, answer: '', toolUses: [] } as never
+  })
+  await $.tool.call({ tool: 'Skill', skill: 'map-design' } as never)
+  await $.tool.call({ tool: 'Skill', skill: 'map-design' } as never)
+  await $.tool.call({ tool: 'Skill', skill: 'pdf' } as never)
+  for (let i = 0; i < 2; i++) for await (const _ of $.turn.step(STEP)) void _
+
+  for (const surface of ['terminal', 'desktop'] as const) {
+    let ui = await $.ui.mount({ ...PANE, surface })
+    expect(await ui.find({ type: 'Text', text: /map-design  ×2/ })).toBeUndefined()
+    await ui.press({ key: 'station-skills' })
+    await ui.unmount()
+
+    ui = await $.ui.mount({ ...PANE, surface })
+    expect((await ui.find({ type: 'Text', text: /map-design/ }))?.text).toBe('  map-design  ×2')
+    expect((await ui.find({ type: 'Text', text: /pdf/ }))?.text).toBe('  pdf')
+    await ui.press({ key: 'station-model' })
+    await ui.unmount()
+
+    ui = await $.ui.mount({ ...PANE, surface })
+    expect(await ui.find({ type: 'Text', text: /map-design/ })).toBeUndefined()
+    expect((await ui.find({ type: 'Text', text: /opus 5\.5/ }))?.text).toBe('  opus 5.5  ×2')
+    await ui.press({ key: 'station-model' })
+    await ui.unmount()
+
+    ui = await $.ui.mount({ ...PANE, surface })
+    expect(await ui.find({ type: 'Text', text: /opus 5\.5  ×2/ })).toBeUndefined()
+    await ui.unmount()
+  }
 })

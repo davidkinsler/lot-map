@@ -546,6 +546,23 @@ export function newest(entries: readonly Entry[], n: number): Entry[] {
   return [...entries.slice(0, cut).filter(e => e.status === 'run').slice(-20), ...entries.slice(cut)]
 }
 
+/** Names a station keeps for its list; any further name is counted under "…". */
+export const MAX_NAMES = 30
+
+/** One more use of `name` at `station`, for the list a station's button opens. Pairs, not an object: a name is never a key. */
+export function tally(used: Board['used'], station: StationId, name: string): NonNullable<Board['used']> {
+  const list = used?.[station] ?? []
+  const key = list.some(([n]) => n === name) || list.length < MAX_NAMES ? name : '…'
+  const at = list.findIndex(([n]) => n === key)
+  const next: [string, number][] = at < 0 ? [...list, [key, 1]] : list.map(([n, times], i) => [n, i === at ? times + 1 : times])
+  return { ...used, [station]: next }
+}
+
+/** A station's list, the most used first and, among equals, the first used first. */
+export function usedAt(board: Board, station: StationId): [string, number][] {
+  return [...(board.used?.[station] ?? [])].sort((a, b) => b[1] - a[1])
+}
+
 export function drawMap(board: Board, now: number, setup: Setup): string {
   const c = setup.theme === 'light' ? LIGHT : DARK
   shift = setup.layout === 'you-bottom' ? STATIONS.length / 2 : 0
