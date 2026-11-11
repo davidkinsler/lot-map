@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Board, Entry, StationId, Status } from '../types'
-import { STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, newest, setupFrom, shortModel, tally, usedAt } from './map'
+import { STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, newest, notKeptAt, setupFrom, shortModel, tally, usedAt } from './map'
 import type { Setup } from './map'
 
 const PANE = 'lot-map'
@@ -10,7 +10,7 @@ const KEEP = 80
 const CREW = 12
 
 // Change the tag when a field of Entry or Board changes: it declines what an earlier version stored.
-const board = atom({ plugin: 'lot-map', key: 'board' } as const, { entries: [], counts: {} } as Board, { shape: 'board-2' })
+const board = atom({ plugin: 'lot-map', key: 'board' } as const, { entries: [], counts: {} } as Board, { shape: 'board-3' })
 
 // The station whose list is open under the map, or '' for none.
 const shown = atom({ plugin: 'lot-map', key: 'shown' } as const, '' as string, { shape: 'shown-1' })
@@ -343,15 +343,17 @@ export const register: Register = (on, options) => {
       )
     const openStation = usedStations.find(s => s.id === open)
     const list = openStation === undefined ? [] : usedAt(state, openStation.id)
+    // Uses the count holds but the list does not: counted when no names were kept.
+    const notKept = openStation === undefined ? 0 : notKeptAt(state, openStation.id)
     const details =
       openStation === undefined ? null : (
         <Box flexDirection="column">
           <Text mono size="footnote" bold>{`${t.stations[openStation.id]}:`}</Text>
-          {list.length === 0 ? (
-            <Text mono size="footnote" dimColor>{t.nothingYet}</Text>
-          ) : (
-            list.map(([name, times]) => <Text mono size="footnote">{`  ${name}${times > 1 ? `  ×${times}` : ''}`}</Text>)
-          )}
+          {list.map(([name, times]) => <Text mono size="footnote">{`  ${name}${times > 1 ? `  ×${times}` : ''}`}</Text>)}
+          {notKept > 0 ? <Text mono size="footnote" dimColor>{`  ${t.notKept(notKept)}`}</Text> : null}
+          {list.length === 0 && notKept <= 0 ? <Text mono size="footnote" dimColor>{`  ${t.nothingYet}`}</Text> : null}
+          {/* A rule between the list and the rest of the pane; cut at the pane's edge, never wrapped. */}
+          <Text mono size="footnote" dimColor wrap="truncate">{'─'.repeat(200)}</Text>
         </Box>
       )
 

@@ -563,6 +563,12 @@ export function usedAt(board: Board, station: StationId): [string, number][] {
   return [...(board.used?.[station] ?? [])].sort((a, b) => b[1] - a[1])
 }
 
+/** Uses a station's count holds that its list does not: counted when no names were kept. */
+export function notKeptAt(board: Board, station: StationId): number {
+  const listed = (board.used?.[station] ?? []).reduce((sum, [, times]) => sum + times, 0)
+  return Math.max(0, (board.counts[station] ?? 0) - listed)
+}
+
 export function drawMap(board: Board, now: number, setup: Setup): string {
   const c = setup.theme === 'light' ? LIGHT : DARK
   shift = setup.layout === 'you-bottom' ? STATIONS.length / 2 : 0

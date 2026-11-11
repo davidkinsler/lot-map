@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import type { Board } from '../types'
 import type { Entry } from '../types'
-import { MAX_NAMES, classify, clean, drawMap, firstLine, foldRows, formatMs, memoryIds, newest, routeOf, setupFrom, tally, usedAt } from './map'
+import { MAX_NAMES, classify, clean, drawMap, firstLine, foldRows, formatMs, memoryIds, newest, notKeptAt, routeOf, setupFrom, tally, usedAt } from './map'
 import { stringsFor } from './text'
 
 const PANE = {
@@ -634,6 +634,11 @@ test('a station keeps the names it was used for, the most used first, thirty at 
   expect(list.length).toBe(MAX_NAMES + 1)
   expect(list[0]).toEqual(['…', 5])
   expect(list[1]).toEqual(['job 0', 2])
+  // What the count holds beyond the list: uses counted before names were kept.
+  expect(notKeptAt({ entries: [], counts: { skills: 5 }, used }, 'skills')).toBe(2)
+  expect(notKeptAt({ entries: [], counts: { skills: 2 } }, 'skills')).toBe(2)
+  expect(notKeptAt({ entries: [], counts: { skills: 3 }, used }, 'skills')).toBe(0)
+  expect(stringsFor('en').notKept(2)).toBe('2 more from before the list was kept')
 })
 
 test('a station\'s button opens what it was used for, and a second press closes it', { options: OWN }, async ($, on) => {
@@ -656,6 +661,8 @@ test('a station\'s button opens what it was used for, and a second press closes 
     ui = await $.ui.mount({ ...PANE, surface })
     expect((await ui.find({ type: 'Text', text: /map-design/ }))?.text).toBe('  map-design  ×2')
     expect((await ui.find({ type: 'Text', text: /pdf/ }))?.text).toBe('  pdf')
+    expect(await ui.find({ type: 'Text', text: /больше|до того/ })).toBeUndefined()
+    expect((await ui.find({ type: 'Text', text: /^─+$/ }))?.text.length).toBe(200)
     await ui.press({ key: 'station-model' })
     await ui.unmount()
 
@@ -667,6 +674,7 @@ test('a station\'s button opens what it was used for, and a second press closes 
 
     ui = await $.ui.mount({ ...PANE, surface })
     expect(await ui.find({ type: 'Text', text: /opus 5\.5  ×2/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /^─+$/ })).toBeUndefined()
     await ui.unmount()
   }
 })

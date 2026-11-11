@@ -37,6 +37,8 @@ export type Strings = {
   fileForYou: string
   /** The word before a file's name: read, written or edited. */
   fileAction: Record<'read' | 'write' | 'edit', string>
+  /** Under a station's list: uses counted before names were kept (an earlier version, in the same session). */
+  notKept: (n: number) => string
   ms: (n: number) => string
   seconds: (s: string) => string
   minutes: (m: number, s: number) => string
@@ -87,6 +89,7 @@ const en: Strings = {
   questionForYou: 'question for you',
   fileForYou: 'file for you',
   fileAction: { read: 'read', write: 'write', edit: 'edit' },
+  notKept: n => `${n} more from before the list was kept`,
   ms: n => `${n} ms`,
   seconds: s => `${s} s`,
   minutes: (m, s) => `${m} min ${s} s`,
@@ -137,6 +140,7 @@ const ru: Strings = {
   questionForYou: 'вопрос тебе',
   fileForYou: 'файл тебе',
   fileAction: { read: 'чтение', write: 'запись', edit: 'правка' },
+  notKept: n => `ещё ${n} до того, как список начал вестись`,
   ms: n => `${n} мс`,
   seconds: s => `${s} с`,
   minutes: (m, s) => `${m} мин ${s} с`,
@@ -187,6 +191,7 @@ const es: Strings = {
   questionForYou: 'pregunta para ti',
   fileForYou: 'archivo para ti',
   fileAction: { read: 'leer', write: 'escribir', edit: 'editar' },
+  notKept: n => `${n} más de antes de que se guardara la lista`,
   ms: n => `${n} ms`,
   seconds: s => `${s} s`,
   minutes: (m, s) => `${m} min ${s} s`,
@@ -237,6 +242,7 @@ const fr: Strings = {
   questionForYou: 'question pour vous',
   fileForYou: 'fichier pour vous',
   fileAction: { read: 'lire', write: 'écrire', edit: 'modifier' },
+  notKept: n => `${n} de plus, d'avant la tenue de la liste`,
   ms: n => `${n} ms`,
   seconds: s => `${s.replace('.', ',')} s`,
   minutes: (m, s) => `${m} min ${s} s`,
@@ -287,6 +293,7 @@ const de: Strings = {
   questionForYou: 'Frage an dich',
   fileForYou: 'Datei für dich',
   fileAction: { read: 'lesen', write: 'schreiben', edit: 'bearbeiten' },
+  notKept: n => `${n} weitere von vor Beginn der Liste`,
   ms: n => `${n} ms`,
   seconds: s => `${s.replace('.', ',')} s`,
   minutes: (m, s) => `${m} Min. ${s} s`,
