@@ -35,6 +35,8 @@ export type Strings = {
   loadingTools: string
   questionForYou: string
   fileForYou: string
+  /** The word before a file's name: read, written or edited. */
+  fileAction: Record<'read' | 'write' | 'edit', string>
   ms: (n: number) => string
   seconds: (s: string) => string
   minutes: (m: number, s: number) => string
@@ -84,6 +86,7 @@ const en: Strings = {
   loadingTools: 'loading tools',
   questionForYou: 'question for you',
   fileForYou: 'file for you',
+  fileAction: { read: 'read', write: 'write', edit: 'edit' },
   ms: n => `${n} ms`,
   seconds: s => `${s} s`,
   minutes: (m, s) => `${m} min ${s} s`,
@@ -133,6 +136,7 @@ const ru: Strings = {
   loadingTools: 'загрузка инструментов',
   questionForYou: 'вопрос тебе',
   fileForYou: 'файл тебе',
+  fileAction: { read: 'чтение', write: 'запись', edit: 'правка' },
   ms: n => `${n} мс`,
   seconds: s => `${s} с`,
   minutes: (m, s) => `${m} мин ${s} с`,
@@ -182,6 +186,7 @@ const es: Strings = {
   loadingTools: 'cargando herramientas',
   questionForYou: 'pregunta para ti',
   fileForYou: 'archivo para ti',
+  fileAction: { read: 'leer', write: 'escribir', edit: 'editar' },
   ms: n => `${n} ms`,
   seconds: s => `${s} s`,
   minutes: (m, s) => `${m} min ${s} s`,
@@ -231,6 +236,7 @@ const fr: Strings = {
   loadingTools: 'chargement des outils',
   questionForYou: 'question pour vous',
   fileForYou: 'fichier pour vous',
+  fileAction: { read: 'lire', write: 'écrire', edit: 'modifier' },
   ms: n => `${n} ms`,
   seconds: s => `${s.replace('.', ',')} s`,
   minutes: (m, s) => `${m} min ${s} s`,
@@ -280,6 +286,7 @@ const de: Strings = {
   loadingTools: 'Werkzeuge werden geladen',
   questionForYou: 'Frage an dich',
   fileForYou: 'Datei für dich',
+  fileAction: { read: 'lesen', write: 'schreiben', edit: 'bearbeiten' },
   ms: n => `${n} ms`,
   seconds: s => `${s.replace('.', ',')} s`,
   minutes: (m, s) => `${m} Min. ${s} s`,

@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import type { Board } from '../types'
 import type { Entry } from '../types'
-import { classify, clean, drawMap, firstLine, foldRows, formatMs, memoryIds, routeOf, setupFrom } from './map'
+import { classify, clean, drawMap, firstLine, foldRows, formatMs, memoryIds, newest, routeOf, setupFrom } from './map'
 import { stringsFor } from './text'
 
 const PANE = {
@@ -62,7 +62,10 @@ test('out of the box, memory is only what every install has', () => {
 
 test('labels never carry what was written or searched', () => {
   const label = (tool: string, input: Record<string, unknown>) => classify(tool, input, SETUP).label
-  expect(label('Read', { file_path: '/a/b/c/content.py' })).toBe('c/content.py')
+  expect(label('Read', { file_path: '/a/b/c/content.py' })).toBe('чтение c/content.py')
+  expect(label('Write', { file_path: '/a/b/c/content.py', content: 'private' })).toBe('запись c/content.py')
+  expect(label('Edit', { file_path: '/a/b/c/content.py', old_string: 'private' })).toBe('правка c/content.py')
+  expect(label('Read', {})).toBe('Read')
   expect(label('Bash', { command: 'recall add "private text" --category journal' })).toBe('add')
   expect(label('Bash', { command: 'recall memory journal --last 30' })).toBe('memory')
   expect(label('Bash', { command: 'recall add private words here' })).toBe('add')
@@ -98,8 +101,8 @@ test('a password never reaches a label, even with a slash, a question mark or a 
 test('a Windows path is read like any other: the last two parts, memory folders, command names', () => {
   const label = (tool: string, input: Record<string, unknown>) => classify(tool, input, SETUP).label
   const at = (tool: string, input: Record<string, unknown>, setup = SETUP) => classify(tool, input, setup).station
-  expect(label('Read', { file_path: 'C:\\Users\\a\\private\\c\\content.py' })).toBe('c/content.py')
-  expect(label('Edit', { file_path: 'C:\\Users\\a\\b/mixed\\n.md' })).toBe('mixed/n.md')
+  expect(label('Read', { file_path: 'C:\\Users\\a\\private\\c\\content.py' })).toBe('чтение c/content.py')
+  expect(label('Edit', { file_path: 'C:\\Users\\a\\b/mixed\\n.md' })).toBe('правка mixed/n.md')
   expect(at('Read', { file_path: 'C:\\Users\\a\\.claude\\projects\\C--Users-a-p\\memory\\n.md' }, STRANGER)).toBe('memory')
   expect(at('Read', { file_path: 'C:\\Users\\a\\.recall\\n.md' })).toBe('memory')
   expect(at('Read', { file_path: 'C:\\Users\\a\\recall\\n.md' })).toBe('files')
@@ -175,7 +178,7 @@ test('every language has every word, in a table of its own', () => {
   expect(stringsFor('constructor').title).toBe(en.title)
 })
 
-for (const [language, row] of [['es', 'Archivos  b/content.py'], ['fr', 'Fichiers   b/content.py'], ['de', 'Dateien    b/content.py']] as const) {
+for (const [language, row] of [['es', 'Archivos  leer b/content.py'], ['fr', 'Fichiers   lire b/content.py'], ['de', 'Dateien    lesen b/content.py']] as const) {
   test(`the pane speaks ${language}, its columns even`, { options: { language } }, async ($, on) => {
     on('clock.now', () => ({ value: 1_000_000 }))
     on('tool.call', () => ({ result: {} }))
@@ -330,7 +333,7 @@ test('what an earlier version stored is declined', { options: OWN }, async ($, o
 
 const STEP = { turnId: 't1', index: 0, model: 'claude-opus-5-5', messageCount: 1 } as const
 
-test('a model step streams through untouched and shows on the map', { options: OWN }, async ($, on) => {
+test('a model step streams through untouched, and once done leaves the feed to the calls it made', { options: OWN }, async ($, on) => {
   on('clock.now', () => ({ value: 1_000_000 }))
   on('turn.step', async function* () {
     yield { kind: 'text', index: 0, text: 'первый' } as never
@@ -344,9 +347,8 @@ test('a model step streams through untouched and shows on the map', { options: O
   expect(seen).toEqual([{ kind: 'text', index: 0, text: 'первый' }, { kind: 'text', index: 0, text: 'второй' }])
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  const row = await ui.find({ type: 'Text', text: /шаг 1/ })
-  expect(row?.text).toContain('Модель')
-  expect(row?.text).toContain('opus 5.5')
+  expect(await ui.find({ type: 'Text', text: /шаг 1/ })).toBeUndefined()
+  expect((await ui.find({ type: 'Svg' }))?.props.source).toContain('opus 5.5')
   await ui.unmount()
 })
 
@@ -508,7 +510,37 @@ test('a model that changes mid-session is a row of its own, and the first model 
   const row = await ui.find({ type: 'Text', text: /→/ })
   expect(row?.text).toContain('◆ Модель')
   expect(row?.text).toContain('opus 5.5 → fable 5.2')
-  expect((await ui.find({ type: 'Text', text: /\+1/ }))?.text).toContain('opus 5.5 · шаг 1')
+  expect(await ui.find({ type: 'Text', text: /шаг 1/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('a long call stays on the map however many calls come after it', () => {
+  const now = 1_000_000
+  const long = entry('agents', now - 120_000, { status: 'run', endedAt: undefined })
+  const after = Array.from({ length: 100 }, (_, i) => entry('files', now - 100_000 + i * 100))
+  expect(newest([long, ...after], 40)[0]).toBe(long)
+  expect(newest([long, ...after], 40).length).toBe(41)
+  expect(newest([entry('files', 1), ...after], 40).length).toBe(40)
+  expect(newest(after.slice(0, 10), 40).length).toBe(10)
+  const svg = drawMap({ entries: [long, ...after], counts: { agents: 1, files: 100 } }, now, STRANGER)
+  expect(svg).toContain('dur="60.000s" repeatCount="indefinite"')
+})
+
+test('with finished model steps hidden, the calls either side of them fold together', () => {
+  const isStep = (e: Entry): boolean => e.station === 'model' && e.status === 'ok'
+  const rows = foldRows([entry('files', 1), entry('model', 2), entry('files', 3), entry('model', 4, { status: 'run', endedAt: undefined })], 16, isStep)
+  expect(rows.map(r => [r.entry.station, r.times])).toEqual([['model', 1], ['files', 2]])
+})
+
+test('a subagent\'s own calls are marked in the feed, the main loop\'s are not', { options: OWN }, async ($, on) => {
+  on('clock.now', () => ({ value: 1_000_000 }))
+  on('tool.call', () => ({ result: {} }))
+  await $.tool.call({ tool: 'Read', file_path: '/a/b/main.py' })
+  await $.tool.call({ tool: 'Bash', command: 'ls', description: 'List the folder', agentId: 'a1' } as never)
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect((await ui.find({ type: 'Text', text: /List the folder/ }))?.text).toContain('↳ List the folder')
+  expect((await ui.find({ type: 'Text', text: /main\.py/ }))?.text).not.toContain('↳')
   await ui.unmount()
 })
 

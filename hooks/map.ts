@@ -194,7 +194,9 @@ export function classify(tool: string, input: Record<string, unknown>, setup: Se
     case 'Edit':
     case 'NotebookEdit': {
       const path = str(input.file_path) || str(input.notebook_path)
-      return { station: isMemoryPath(path, setup) ? 'memory' : 'files', label: lastTwo(path) || tool }
+      const action = t.fileAction[tool === 'Read' ? 'read' : tool === 'Write' ? 'write' : 'edit']
+      const name = lastTwo(path)
+      return { station: isMemoryPath(path, setup) ? 'memory' : 'files', label: name === '' ? tool : `${action} ${name}` }
     }
     case 'Grep':
     case 'Glob':
@@ -535,11 +537,20 @@ function station(s: (typeof STATIONS)[number], i: number, { entries, board, now,
 }
 
 
+/**
+ * The newest `n` entries, and before them up to twenty older ones still running,
+ * so that a long call (a subagent at work, a slow command) stays on the map until it ends.
+ */
+export function newest(entries: readonly Entry[], n: number): Entry[] {
+  const cut = Math.max(0, entries.length - n)
+  return [...entries.slice(0, cut).filter(e => e.status === 'run').slice(-20), ...entries.slice(cut)]
+}
+
 export function drawMap(board: Board, now: number, setup: Setup): string {
   const c = setup.theme === 'light' ? LIGHT : DARK
   shift = setup.layout === 'you-bottom' ? STATIONS.length / 2 : 0
   const core: Point = { x: CX, y: CY }
-  const recent = board.entries.slice(-40)
+  const recent = newest(board.entries, 40)
   const flights = recent.filter(e => now - e.startedAt < PULSE_MS + RIPPLE_MS).slice(-14)
   const returns = recent.filter(e => e.endedAt !== undefined && e.from !== 'inbound' && now - e.endedAt < PULSE_MS + RIPPLE_MS).slice(-14)
   const beams = recent.filter(e => now - e.startedAt < GLOW_MS / 2).slice(-10)
@@ -682,12 +693,15 @@ export type Row = { entry: Entry; times: number; tookMs: number }
 
 const isPlain = (e: Entry): boolean => e.status === 'ok' && e.mark === undefined
 
-/** The newest rows first. Finished calls that follow one another at one station fold into a single row. */
-export function foldRows(entries: readonly Entry[], max = 16): Row[] {
+/**
+ * The newest rows first. Finished calls that follow one another at one station fold into a single row.
+ * Entries that `hide` names are left out, and the rows either side of them can then fold together.
+ */
+export function foldRows(entries: readonly Entry[], max = 16, hide: (e: Entry) => boolean = () => false): Row[] {
   const rows: Row[] = []
   for (let i = entries.length - 1; i >= 0; i--) {
     const e = entries[i]
-    if (e === undefined) continue
+    if (e === undefined || hide(e)) continue
     const took = e.endedAt === undefined ? 0 : Math.max(0, e.endedAt - e.startedAt)
     const last = rows[rows.length - 1]
     if (last !== undefined && isPlain(e) && isPlain(last.entry) && last.entry.station === e.station && last.entry.from === e.from) {

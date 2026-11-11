@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Board, Entry, StationId, Status } from '../types'
-import { STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, setupFrom, shortModel } from './map'
+import { STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, newest, setupFrom, shortModel } from './map'
 import type { Setup } from './map'
 
 const PANE = 'lot-map'
@@ -58,7 +58,7 @@ async function begin($: EngineInterface, start: Start): Promise<string | undefin
     await update($, board, b => ({
       ...b,
       ...start.patch,
-      entries: [...b.entries, entry].slice(-KEEP),
+      entries: newest([...b.entries, entry], KEEP),
       counts: start.uncounted ? b.counts : { ...b.counts, [entry.station]: (b.counts[entry.station] ?? 0) + 1 },
       // What a hook brought to memory unasked is counted apart from what was asked for.
       ...(entry.station === 'memory' && entry.from === 'inbound' && !start.uncounted ? { pushed: (b.pushed ?? 0) + 1 } : {}),
@@ -268,7 +268,7 @@ export const register: Register = (on, options) => {
       await update($, board, b => {
         if (b.entries.some(x => x.station === 'skills' && x.status === 'run' && x.label === e.skill)) return b
         const entry: Entry = { id: newId(now), station: 'skills', label: e.skill, from: 'core', startedAt: now, endedAt: now, status: 'ok' }
-        return { ...b, entries: [...b.entries, entry].slice(-KEEP), counts: { ...b.counts, skills: (b.counts.skills ?? 0) + 1 } }
+        return { ...b, entries: newest([...b.entries, entry], KEEP), counts: { ...b.counts, skills: (b.counts.skills ?? 0) + 1 } }
       })
     })
     return result
@@ -288,13 +288,17 @@ export const register: Register = (on, options) => {
     const now = await $.clock.now()
     const { Box, Text } = $.ui.resolve(e)
 
-    const rows = foldRows(state.entries).map(({ entry, times, tookMs }) => {
+    // A finished model step adds nothing the line above the feed does not say ("step 5"), and every other row would be one.
+    const isFinishedStep = (x: Entry): boolean => x.station === 'model' && x.status === 'ok' && x.mark === undefined && x.label !== t.compacting
+    const rows = foldRows(state.entries, 16, isFinishedStep).map(({ entry, times, tookMs }) => {
       const isSwitch = entry.mark === 'switch'
       const mark = isSwitch ? '◆' : entry.status === 'run' ? '●' : entry.status === 'ok' ? '·' : '✕'
       const took = entry.endedAt === undefined ? t.running : tookMs > 0 ? formatMs(tookMs, t) : ''
       // Theme keys, so the rows read on a light theme as well as on a dark one.
       const color = isSwitch || entry.status === 'run' ? 'claude' : entry.status === 'ok' ? undefined : 'error'
-      const line = `${mark} ${t.stations[entry.station].padEnd(column)} ${entry.label}${times > 1 ? `  +${times - 1}` : ''}${took === '' ? '' : `  ${took}`}`
+      // A subagent's own calls are indented under an arrow, so they read apart from the main loop's.
+      const byAgent = entry.from === 'agents' ? '↳ ' : ''
+      const line = `${mark} ${t.stations[entry.station].padEnd(column)} ${byAgent}${entry.label}${times > 1 ? `  +${times - 1}` : ''}${took === '' ? '' : `  ${took}`}`
       return (
         <Text mono size="footnote" color={color} dimColor={entry.status === 'ok' && !isSwitch}>
           {line}
