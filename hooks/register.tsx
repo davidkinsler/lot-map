@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Board, Entry, StationId, Status } from '../types'
-import { DARK_TONES, ON_TONE, STATIONS, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, newest, notKeptAt, setupFrom, shortModel, tally, usedAt } from './map'
+import { DARK_TONES, STATIONS, buttonTone, classify, clean, describeNow, drawMap, firstLine, foldRows, formatMs, memoryIds, newest, notKeptAt, setupFrom, shortModel, tally, usedAt } from './map'
 import type { Setup } from './map'
 
 const PANE = 'lot-map'
@@ -337,18 +337,20 @@ export const register: Register = (on, options) => {
       ) : (
         <Box flexDirection="row" flexWrap="wrap" gap="xs">
           {usedStations.map(s => {
-            // A small chip in the station's own map color, with dark words on it, so it reads on a light pane and a dark one;
-            // the open station's chip takes the brighter tone and bold words. The Text carries the color too, in case a surface draws the button over the Box.
-            const tone = DARK_TONES[s.id][open === s.id ? 1 : 0]
+            // The words in the station's own map color, small. The desktop draws its own button and takes no background
+            // color for it (seen 11 November 2026), so the color goes on the words. The open station's button is the primary one.
             const words = `${t.stations[s.id]} ${state.counts[s.id] ?? 0}`
             return (
-              <Box key={`chip-${s.id}`} backgroundColor={tone} paddingX="xs">
-                <Button key={`station-${s.id}`} plain label={words} onPress={toggle(s.id)}>
-                  <Text size="caption" color={ON_TONE} backgroundColor={tone} weight={open === s.id ? 'bold' : 'regular'}>
-                    {words}
-                  </Text>
-                </Button>
-              </Box>
+              <Button
+                key={`station-${s.id}`}
+                label={words}
+                {...(open === s.id ? { variant: 'primary' as const } : {})}
+                onPress={toggle(s.id)}
+              >
+                <Text size="caption" color={buttonTone(s.id, setup.theme)} weight="semibold">
+                  {words}
+                </Text>
+              </Button>
             )
           })}
         </Box>

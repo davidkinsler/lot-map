@@ -339,9 +339,6 @@ export const DARK_TONES: Record<StationId, readonly [string, string]> = {
   hooks: ['#c9967a', '#e3c3ae'],
 }
 
-/** The words on a station's button: dark, so that they read on every one of the colors above (contrast 4.5 or more, tested). */
-export const ON_TONE = '#1f2228'
-
 const LIGHT_TONES: Record<StationId, readonly [string, string]> = {
   you: ['#5a5f69', '#2e323a'],
   model: ['#b8762a', '#8f560f'],
@@ -354,6 +351,12 @@ const LIGHT_TONES: Record<StationId, readonly [string, string]> = {
   skills: ['#1f86b8', '#165f84'],
   hooks: ['#8f5f45', '#6a4431'],
 }
+
+/**
+ * The color of a station's words on its button. Outside the map no rule repaints for a light surface, so `auto` takes
+ * the dark tones, which read on the desktop's dark buttons; the `light` theme takes the light ones.
+ */
+export const buttonTone = (station: StationId, theme: Setup['theme']): string => (theme === 'light' ? LIGHT_TONES : DARK_TONES)[station][0]
 
 /** A station's two colors in the palette at hand. */
 const toneOf = (c: Palette, station: StationId): readonly [string, string] => (c === LIGHT ? LIGHT_TONES : DARK_TONES)[station]
