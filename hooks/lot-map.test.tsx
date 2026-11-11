@@ -664,6 +664,25 @@ test('a station keeps the names it was used for, the most used first, thirty at 
   expect(stringsFor('en').notKept(2)).toBe('2 more from before the list was kept')
 })
 
+test('the map is drawn again only when the board changes, not on every redraw (a scroll redraws the pane)', { options: OWN }, async ($, on) => {
+  let clock = 1_000_000
+  on('clock.now', () => ({ value: clock }))
+  on('tool.call', () => ({ result: {} }))
+  await $.tool.call({ tool: 'Skill', skill: 'pdf' } as never)
+  const source = async () => {
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+    const svg = (await ui.find({ type: 'Svg' }))?.props.source
+    await ui.unmount()
+    return svg
+  }
+  const first = await source()
+  expect(typeof first).toBe('string')
+  clock += 5_000
+  expect(await source()).toBe(first)
+  await $.tool.call({ tool: 'Skill', skill: 'map-design' } as never)
+  expect(await source()).not.toBe(first)
+})
+
 test('a station\'s button opens what it was used for, and a second press closes it', { options: OWN }, async ($, on) => {
   on('clock.now', () => ({ value: 1_000_000 }))
   on('tool.call', () => ({ result: {} }))

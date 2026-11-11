@@ -296,6 +296,11 @@ export const register: Register = (on, options) => {
     }
   })
 
+  // The map's last picture and the board it was drawn from. A pane is drawn again on every scroll too, and each new
+  // picture (its animations are timed from the moment it is drawn) was loaded afresh, so the pane jumped while scrolled.
+  // The map is drawn again only when the board changes.
+  let drawn: { from: string; source: string } | undefined
+
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const state = await read($, board)
     const now = await $.clock.now()
@@ -380,9 +385,11 @@ export const register: Register = (on, options) => {
     }
 
     const { Svg } = $.ui.resolve(e)
+    const from = JSON.stringify(state)
+    if (drawn?.from !== from) drawn = { from, source: drawMap(state, now, setup) }
     return (
       <Box flexDirection="column">
-        <Svg source={drawMap(state, now, setup)} alt={`${t.title}. ${describeNow(state, t)}`} />
+        <Svg source={drawn.source} alt={`${t.title}. ${describeNow(state, t)}`} />
         {buttons}
         {details}
         {current}
