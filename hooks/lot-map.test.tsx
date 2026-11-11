@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import type { Board } from '../types'
 import type { Entry } from '../types'
-import { DARK_TONES, MAX_NAMES, classify, clean, drawMap, firstLine, foldRows, formatMs, memoryIds, newest, notKeptAt, routeOf, setupFrom, tally, usedAt } from './map'
+import { DARK_TONES, MAX_NAMES, ON_TONE, classify, clean, drawMap, firstLine, foldRows, formatMs, memoryIds, newest, notKeptAt, routeOf, setupFrom, tally, usedAt } from './map'
 import { stringsFor } from './text'
 
 const PANE = {
@@ -507,6 +507,17 @@ test('a station has its own color on the map, the one its button\'s dot has', ()
   expect(svg).not.toContain(`stroke="${DARK_TONES.browser[0]}"`)
 })
 
+test('the words on a station\'s button read on every station color (WCAG contrast 4.5 or more)', () => {
+  const lum = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(c => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+  }
+  for (const color of Object.values(DARK_TONES).flat()) {
+    const [hi, lo] = [lum(color), lum(ON_TONE)].sort((a, b) => b - a)
+    expect((hi + 0.05) / (lo + 0.05), color).toBeGreaterThanOrEqual(4.5)
+  }
+})
+
 const stepOn = (model: string) => ({ turnId: 't1', index: 0, model, messageCount: 1 }) as const
 
 test('a model that changes mid-session is a row of its own, and the first model of a session is not', { options: OWN }, async ($, on) => {
@@ -667,11 +678,14 @@ test('a station\'s button opens what it was used for, and a second press closes 
   for (const surface of ['terminal', 'desktop'] as const) {
     let ui = await $.ui.mount({ ...PANE, surface })
     expect(await ui.find({ type: 'Text', text: /map-design  ×2/ })).toBeUndefined()
+    // Each button is a chip in its station's color, the brighter one while its list is open.
+    expect((await ui.find({ type: 'Box', key: 'chip-skills' }))?.props.backgroundColor).toBe(DARK_TONES.skills[0])
     await ui.press({ key: 'station-skills' })
     await ui.unmount()
 
     ui = await $.ui.mount({ ...PANE, surface })
     expect((await ui.find({ type: 'Text', text: /map-design/ }))?.text).toBe('  map-design  ×2')
+    expect((await ui.find({ type: 'Box', key: 'chip-skills' }))?.props.backgroundColor).toBe(DARK_TONES.skills[1])
     expect((await ui.find({ type: 'Text', text: /pdf/ }))?.text).toBe('  pdf')
     expect(await ui.find({ type: 'Text', text: /больше|до того/ })).toBeUndefined()
     expect((await ui.find({ type: 'Text', text: /^─+$/ }))?.text.length).toBe(200)

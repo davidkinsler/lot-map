@@ -339,6 +339,9 @@ export const DARK_TONES: Record<StationId, readonly [string, string]> = {
   hooks: ['#c9967a', '#e3c3ae'],
 }
 
+/** The words on a station's button: dark, so that they read on every one of the colors above (contrast 4.5 or more, tested). */
+export const ON_TONE = '#1f2228'
+
 const LIGHT_TONES: Record<StationId, readonly [string, string]> = {
   you: ['#5a5f69', '#2e323a'],
   model: ['#b8762a', '#8f560f'],
